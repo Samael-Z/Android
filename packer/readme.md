@@ -1,5 +1,5 @@
-**源程序-hellobutton**
-**加壳程序-packer1**
+**源程序-hellobutton**  
+**加壳程序-packer1**  
 **加壳逻辑**  
 核心是通过替换contextImpl——>mPackageInfo(LoadedApk)——>mClassLoader(ClassLoader)成员来完成加壳  
 其次是加壳的时机问题，由于安卓程序执行的一个类是MainActivity，我们需要在执行该类之前完成替换ClassLoader的工作。  
