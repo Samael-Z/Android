@@ -1,4 +1,5 @@
 ### 参考链接 https://github.com/windy-purple/androidshell  
+### 参考博文 https://bbs.kanxue.com/thread-261939.htm  
 #### packer1加壳
 **源程序-hellobutton**  
 **加壳程序-packer1**  
