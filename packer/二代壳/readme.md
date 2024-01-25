@@ -1,3 +1,4 @@
+packer221.7z
 **源程序-hellobutton**  
 **加壳程序-packer221**  
 **加壳逻辑**  
@@ -10,3 +11,12 @@
 //报错，不知道是不是加载时机问题（java.lang.NoSuchMethodError: android.os.Trace.endSection）  
 //出错原因：源程序最低编译android4.4与当前虚拟机android4.1不匹配  
 注意，通过反射调用openDexFile加载dex的加壳方式再后面的android版本中被修复
+
+
+packer222_err.7z
+**源程序-testempty**  
+**加壳程序-packer222**  
+**参考链接**  
+https://www.cnblogs.com/ltyandy/p/11642108.html  
+在此基础上进行小修改，无法正常加载我的dex文件，报错信息：java.lang.NoClassDefFoundError: com.example.testempty.R$layout。不知道为啥报这个错误  
+看起来是资源问题，但是资源已经拷贝了过来，不清楚原因暂时存档
