@@ -1,0 +1,3 @@
+﻿  Elf ExplorerDlg.cpp
+D:\androidclib\Elf Explorer\Elf Explorer\Elf ExplorerDlg.cpp(848): warning C4715: “CElfExplorerDlg::GetType2CString”: 不是所有的控件路径都返回值
+  Elf Explorer.vcxproj -> D:\androidclib\Elf Explorer\Debug\Elf Explorer.exe
