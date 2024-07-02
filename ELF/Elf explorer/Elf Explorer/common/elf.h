@@ -2,6 +2,52 @@
 #pragma once
 
 
+/* This is the info that is needed to parse the dynamic section of the file */
+#define DT_NULL	0
+#define DT_NEEDED	1
+#define DT_PLTRELSZ	2
+#define DT_PLTGOT	3
+#define DT_HASH		4
+#define DT_STRTAB	5
+#define DT_SYMTAB	6
+#define DT_RELA		7
+#define DT_RELASZ	8
+#define DT_RELAENT	9
+#define DT_STRSZ	10
+#define DT_SYMENT	11
+#define DT_INIT		25
+#define DT_FINI		26
+#define DT_SONAME	14
+#define DT_RPATH 	15
+#define DT_SYMBOLIC	16
+#define DT_REL	    17
+#define DT_RELSZ	18
+#define DT_RELENT	19
+#define DT_PLTREL	20
+#define DT_DEBUG	21
+#define DT_TEXTREL	22
+#define DT_JMPREL	23
+#define DT_LOPROC	0x70000000
+#define DT_HIPROC	0x7fffffff
+#define DT_MIPS_RLD_VERSION	0x70000001
+#define DT_MIPS_TIME_STAMP	0x70000002
+#define DT_MIPS_ICHECKSUM	0x70000003
+#define DT_MIPS_IVERSION	0x70000004
+#define DT_MIPS_FLAGS	0x70000005
+#define RHF_NONE	  0
+#define RHF_HARDWAY	  1
+#define RHF_NOTPOT	  2
+#define DT_MIPS_BASE_ADDRESS	0x70000006
+#define DT_MIPS_CONFLICT	0x70000008
+#define DT_MIPS_LIBLIST	0x70000009
+#define DT_MIPS_LOCAL_GOTNO	0x7000000a
+#define DT_MIPS_CONFLICTNO	0x7000000b
+#define DT_MIPS_LIBLISTNO	0x70000010
+#define DT_MIPS_SYMTABNO	0x70000011
+#define DT_MIPS_UNREFEXTNO	0x70000012
+#define DT_MIPS_GOTSYM	0x70000013
+#define DT_MIPS_HIPAGENO	0x70000014
+#define DT_MIPS_RLD_MAP	0x70000016
 
 
 //	Name           Size Alignment   Purpose

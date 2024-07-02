@@ -9,6 +9,7 @@
 #include "afxdialogex.h"
 #include <string>
 #include "common/common.h"
+#include "common/FixSecHead.h"
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -72,6 +73,7 @@ CElfExplorerDlg::CElfExplorerDlg(CWnd* pParent /*=nullptr*/)
 	, m_ElfSHDRNum(_T(""))
 	, m_ElfSNameIdx(_T(""))
 	, m_ElfABI(_T(""))
+	, m_AddSecName(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -99,6 +101,7 @@ void CElfExplorerDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_SECTIONNUM, m_ElfSHDRNum);
 	DDX_Text(pDX, IDC_SECSTRINDEX, m_ElfSNameIdx);
 	DDX_Text(pDX, IDC_OSABI, m_ElfABI);
+	DDX_Text(pDX, IDC_SECNAME, m_AddSecName);
 }
 
 BEGIN_MESSAGE_MAP(CElfExplorerDlg, CDialogEx)
@@ -110,6 +113,8 @@ BEGIN_MESSAGE_MAP(CElfExplorerDlg, CDialogEx)
 	ON_WM_CLOSE()
 	ON_NOTIFY(NM_CLICK, IDC_TREEINFO, &CElfExplorerDlg::OnNMClickTreeinfo)
 	ON_WM_LBUTTONDOWN()
+	ON_BN_CLICKED(BTN_ADDSECTION, &CElfExplorerDlg::OnBnClickedAddsection)
+	ON_BN_CLICKED(BTN_REBUILDSEC, &CElfExplorerDlg::OnBnClickedRebuildsec)
 END_MESSAGE_MAP()
 
 
@@ -279,14 +284,18 @@ VOID CElfExplorerDlg::LoadFileMap()
 		UpdateTips("打开文件失败");
 		return;
 	}
-
-	//char bufTmp[0x1024] = {0};
-	//DWORD dwRead;
-	//int n = ReadFile(hFile, bufTmp, 0x1024, &dwRead, NULL);
+	LARGE_INTEGER  pi;
+	memset(&pi, 0, sizeof(LARGE_INTEGER));
+	GetFileSizeEx(hFile, &pi);
+	m_dwFileSize = pi.QuadPart;
+	CString strSize = "";
+	strSize.Format("%d", m_dwFileSize);
+	strSize.Insert(0, "文件大小：");
+	UpdateTips(strSize.GetString());
 
 	//创建文件映射内核对象，句柄保存hFileMapping
 
-	m_hFileMapping = CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, 0x4000000, NULL);
+	m_hFileMapping = CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, 0, NULL);
 	if (m_hFileMapping == INVALID_HANDLE_VALUE)
 	{
 		UpdateTips("文件映射失败");
@@ -319,7 +328,6 @@ VOID CElfExplorerDlg::FormatELF(PBYTE ElfBase)
 {
 
 	//解析elf文件头32位程序和64位程序分开解析
-	int is64Bit = 0;
 
 	Elf32_Ehdr* EhdrTmp = (Elf32_Ehdr*)ElfBase;
 	char* pCheckMagic = (char*)EhdrTmp;
@@ -332,29 +340,20 @@ VOID CElfExplorerDlg::FormatELF(PBYTE ElfBase)
 		return;
 	}
 	m_SectionTabOff = new SECTIONTAB();
-	if (EhdrTmp->e_ident[4] == 0 )
+	if (EhdrTmp->e_ident[EI_CLASS] == ELFCLASSNONE)
 	{
-		is64Bit = 1;
-	}
-	else if (EhdrTmp->e_ident[4] == 1 )
-	{
-		is64Bit = 1;
-	}
-	else if (EhdrTmp->e_ident[4] == 2)
-	{
-		is64Bit = 2;
-	}
-	else if (EhdrTmp->e_ident[4] == 3)
-	{
-		is64Bit = 3;
-	}
+		UpdateTips("不支持解析非32bit或非64bit文件！");
 
-	if (is64Bit ==1 )
-	{
-		FormatELF32(ElfBase);
 	}
-	else if (is64Bit == 2)
+	else if (EhdrTmp->e_ident[EI_CLASS] == ELFCLASS32)
 	{
+		m_SectionTabOff->dwIs64Bit = ELFCLASS32;
+		FormatELF32(ElfBase);
+
+	}
+	else if (EhdrTmp->e_ident[EI_CLASS] == ELFCLASS64)
+	{
+		m_SectionTabOff->dwIs64Bit = ELFCLASS64;
 		FormatELF64(ElfBase);
 	}
 	else
@@ -362,8 +361,6 @@ VOID CElfExplorerDlg::FormatELF(PBYTE ElfBase)
 		UpdateTips("不支持解析非32bit或非64bit文件！");
 	}
 
-	
-	 
 	return;
 }
 
@@ -577,8 +574,10 @@ VOID CElfExplorerDlg::FormatELF32SHDR(Elf32_Ehdr* ehdr)
 
 		}
 		else if (memcmp(strType.GetString(), ".dynstr", sizeof(".dynstr")) == 0) {
-
 			m_SectionTabOff->dwDynStrTabOff = (DWORD)shdrTmp;
+		}
+		else if (memcmp(strType.GetString(), ".shstrtab", sizeof(".shstrtab")) == 0) {
+			m_SectionTabOff->dwShStrTabOff = (DWORD)shdrTmp;
 		}
 
 	}
@@ -698,7 +697,7 @@ CString CElfExplorerDlg::GetType2CString(int type, int formatData)
 		}
 
 	}
-	else if (type == GetProgramMemType) {
+	else if (type == GetMemType) {
 		switch (formatData) {
 		case PF_None:
 			return StrTmp = "None";
@@ -844,7 +843,7 @@ CString CElfExplorerDlg::GetType2CString(int type, int formatData)
 	}
 
 	}
-	
+	return "NULL";
 }
 
 VOID CElfExplorerDlg::SetListCtlPHDR32Info(Elf32_Phdr* ehdr)
@@ -888,7 +887,7 @@ VOID CElfExplorerDlg::SetListCtlPHDR32Info(Elf32_Phdr* ehdr)
 
 	m_ListCtl.InsertItem(LVIF_TEXT | LVIF_PARAM, nRow, _T(""), 0, 0, 0, 0);
 	m_ListCtl.SetItemText(nRow, 0, "p_flags			内存加载属性");
-	m_ListCtl.SetItemText(nRow++, 1, GetType2CString(GetProgramMemType, ehdr->p_flags));
+	m_ListCtl.SetItemText(nRow++, 1, GetType2CString(GetMemType, ehdr->p_flags));
 
 	m_ListCtl.InsertItem(LVIF_TEXT | LVIF_PARAM, nRow, _T(""), 0, 0, 0, 0);
 	m_ListCtl.SetItemText(nRow, 0, "p_align			内存对齐粒度");
@@ -925,7 +924,7 @@ VOID CElfExplorerDlg::SetListCtlSHDR32Info(Elf32_Shdr* shdr)
 
 	m_ListCtl.InsertItem(LVIF_TEXT | LVIF_PARAM, nRow, _T(""), 0, 0, 0, 0);
 	m_ListCtl.SetItemText(nRow, 0, "sh_flags			内存属性");
-	m_ListCtl.SetItemText(nRow++, 1, GetType2CString(GetSectionType, shdr->sh_flags));
+	m_ListCtl.SetItemText(nRow++, 1, GetType2CString(GetMemType, shdr->sh_flags));
 
 	m_ListCtl.InsertItem(LVIF_TEXT | LVIF_PARAM, nRow, _T(""), 0, 0, 0, 0);
 	m_ListCtl.SetItemText(nRow, 0, "sh_addr			内存地址");
@@ -966,6 +965,8 @@ VOID CElfExplorerDlg::SetListCtlSHDR32Info(Elf32_Shdr* shdr)
 	m_ListCtl.UpdateWindow();
 	return VOID();
 }
+
+
 
 VOID CElfExplorerDlg::SetStrTab32(ITEMDATA* data)
 {
@@ -1352,4 +1353,485 @@ void CElfExplorerDlg::OnLButtonDown(UINT nFlags, CPoint point)
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
 
 	CDialogEx::OnLButtonDown(nFlags, point);
+}
+
+
+void CElfExplorerDlg::OnBnClickedAddsection()
+{
+	if (m_ElfBase == NULL || m_FilePath.IsEmpty())
+	{
+		UpdateTips("没有需要处理的文件！");
+		return;
+	}
+
+	UpdateData(TRUE); 
+	if (m_FilePath.IsEmpty())
+	{
+		UpdateTips("当前无需要增加节的elf文件!");
+		return;
+	}
+	if (m_AddSecName.IsEmpty())
+	{
+		UpdateTips("增加默认节名 <undefined>");
+		m_AddSecName = "undefined";
+	}
+
+	//拼接新节名文件字符串
+	DWORD tc = GetTickCount();
+	CString StrFmt = "";
+	StrFmt.Format("-%d", tc);
+	string strOldName = m_FilePath;
+	int nDot = strOldName.find_last_of(".");
+	string  strNew1 = strOldName.substr(nDot,strOldName.length());
+	string strNewName = "";
+	if (strNew1 == ".so")
+	{
+		strNewName = strOldName.insert(nDot , StrFmt.GetString());
+	}
+	else {
+		strNewName = strOldName + StrFmt.GetString();
+	}
+	int nResult = -1;
+	//加载文件映射
+	HANDLE hFile = CreateFile(strNewName.c_str(),
+		GENERIC_READ | GENERIC_WRITE,
+		FILE_SHARE_READ,
+		NULL,
+		CREATE_ALWAYS,
+		FILE_FLAG_SEQUENTIAL_SCAN,
+		NULL);
+	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		nResult = -2;
+		UpdateTips("创建文件失败");
+	}
+	DWORD dwAddSecSize = m_dwFileSize + 0x2048;
+	//创建文件映射内核对象，句柄保存hFileMapping
+	 HANDLE  hFileMapping = CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, dwAddSecSize, NULL);
+	if (hFileMapping == INVALID_HANDLE_VALUE)
+	{
+		nResult = -2;
+		UpdateTips("文件映射失败");
+	}
+	// 将文件数据映射到进程的地址空间
+	char* pNewAddr = (char*)MapViewOfFile(hFileMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+	if (pNewAddr == nullptr)
+	{
+		nResult = -2;
+		UpdateTips("内存映射分配的地址是空指针！");
+	}
+	memset(pNewAddr, 0, dwAddSecSize);
+	memcpy(pNewAddr, m_ElfBase, m_dwFileSize);
+
+
+
+	if (m_SectionTabOff->dwIs64Bit == ELFCLASS32)
+	{
+		Elf32_Shdr* ShShdr = (Elf32_Shdr*)m_SectionTabOff->dwShStrTabOff;
+
+		//节名称字符串长度
+		DWORD ShStrSize = ShShdr->sh_size + m_AddSecName.GetLength() + 1;
+		char* pShStr = new char[ShStrSize];
+		memset(pShStr, 0, ShStrSize);
+		memcpy(pShStr, m_SectionTabOff->base + ShShdr->sh_offset, ShShdr->sh_size);
+		memcpy(pShStr + ShShdr->sh_size , m_AddSecName.GetString(), m_AddSecName.GetLength());
+		//修改节名称字符串表偏移
+
+		DWORD shStr_NewOff = m_SectionTabOff->dwShStrTabOff - (DWORD)m_SectionTabOff->base;
+		Elf32_Shdr* ShShdrNew = (Elf32_Shdr*)( pNewAddr + shStr_NewOff);
+
+		ShShdrNew->sh_offset = m_dwFileSize;
+		ShShdrNew->sh_size = ShStrSize;
+		//节区长度
+
+		Elf32_Ehdr* ehdr = (Elf32_Ehdr*)pNewAddr;
+
+		DWORD s_Offset = ehdr->e_shoff;
+		WORD s_Num = ehdr->e_shnum;
+		WORD s_EntSize = ehdr->e_shentsize;
+		DWORD s_Size = s_Num * s_EntSize;
+		//节区内容
+		char TmpShdrSize[0x128] = { 0 };
+		memset(TmpShdrSize, 0x90, sizeof(TmpShdrSize));
+		
+		char* pSize = pNewAddr + m_dwFileSize;
+		memcpy(pSize, pShStr, ShStrSize);
+		pSize += ShStrSize;
+		memcpy(pSize, TmpShdrSize, 0x128);
+		pSize += 0x128;
+		memcpy(pSize, pNewAddr + s_Offset, s_Size);
+
+		DWORD sh_offset = m_dwFileSize + ShStrSize + 0x128;
+		//修改节内容
+		ehdr->e_shnum = s_Num + 1;
+		ehdr->e_shoff = m_dwFileSize + ShStrSize + 0x128;
+
+		//增加节的内容
+		Elf32_Shdr* TmpShdr = new Elf32_Shdr();
+		TmpShdr->sh_name = ShShdr->sh_size;
+		TmpShdr->sh_type = 1;
+		TmpShdr->sh_flags = 7;
+		TmpShdr->sh_addr = sh_offset;
+		TmpShdr->sh_offset = sh_offset;
+		TmpShdr->sh_size = 0x128;
+		TmpShdr->sh_link = 0;
+		TmpShdr->sh_info = 0;
+		TmpShdr->sh_addralign = 16;
+		TmpShdr->sh_entsize = 0;
+
+		pSize += s_Size;
+
+		memcpy(pSize, TmpShdr, sizeof(Elf32_Shdr));
+		if (TmpShdr != NULL)
+		{
+			delete[] TmpShdr;
+			TmpShdr = NULL;
+		}
+		if (pShStr != NULL)
+		{
+
+			//这里崩了
+			delete pShStr;
+			pShStr = NULL;
+		}
+	
+		nResult = 1;
+	}
+	else if (m_SectionTabOff->dwIs64Bit == ELFCLASS64)
+	{
+
+	}
+	FlushViewOfFile(pNewAddr, dwAddSecSize);
+	UnmapViewOfFile(pNewAddr);
+	CloseHandle(hFileMapping);
+	CloseHandle(hFile);
+
+
+	if (nResult)
+	{
+		UpdateTips("增加节成功");
+	}
+	else {
+		UpdateTips("增加节失败");
+	}
+
+	return;
+}
+
+
+void CElfExplorerDlg::OnBnClickedRebuildsec()
+{
+	if (m_ElfBase == NULL || m_FilePath.IsEmpty())
+	{
+		UpdateTips("没有需要处理的文件！");
+		return;
+	}
+	//拼接新节名文件字符串
+	DWORD tc = GetTickCount();
+	CString StrFmt = "";
+	StrFmt.Format("-%d-fixSecHeader", tc);
+	string strOldName = m_FilePath;
+	int nDot = strOldName.find_last_of(".");
+	string  strNew1 = strOldName.substr(nDot, strOldName.length());
+	string strNewName = "";
+	if (strNew1 == ".so")
+	{
+		strNewName = strOldName.insert(nDot, StrFmt.GetString());
+	}
+	else {
+		strNewName = strOldName + StrFmt.GetString();
+	}
+	int nResult = -1;
+	//加载文件映射
+	HANDLE hFile = CreateFile(strNewName.c_str(),
+		GENERIC_READ | GENERIC_WRITE,
+		FILE_SHARE_READ,
+		NULL,
+		CREATE_ALWAYS,
+		FILE_FLAG_SEQUENTIAL_SCAN,
+		NULL);
+	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		nResult = -2;
+		UpdateTips("创建文件失败");
+	}
+	DWORD dwAddSecSize = m_dwFileSize + 0x2048;
+	//创建文件映射内核对象，句柄保存hFileMapping
+	HANDLE  hFileMapping = CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, dwAddSecSize, NULL);
+	if (hFileMapping == INVALID_HANDLE_VALUE)
+	{
+		nResult = -2;
+		UpdateTips("文件映射失败");
+	}
+	// 将文件数据映射到进程的地址空间
+	char* pNewAddr = (char*)MapViewOfFile(hFileMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+	if (pNewAddr == nullptr)
+	{
+		nResult = -2;
+		UpdateTips("内存映射分配的地址是空指针！");
+	}
+	memset(pNewAddr, 0, dwAddSecSize);
+	memcpy(pNewAddr, m_ElfBase, m_dwFileSize);
+
+	FixSectionTable(pNewAddr);
+
+	if (m_SectionTabOff->dwIs64Bit == ELFCLASS32)
+	{
+
+	}
+	else if (m_SectionTabOff->dwIs64Bit == ELFCLASS64)
+	{
+
+	}
+	FlushViewOfFile(pNewAddr, dwAddSecSize);
+	UnmapViewOfFile(pNewAddr);
+	CloseHandle(hFileMapping);
+	CloseHandle(hFile);
+
+
+}
+VOID CElfExplorerDlg::FixSectionTable(char* pNewBase)
+{
+	//参考重建节的代码
+	//思路，从程序节的PT_DYNMIC中读取部分节定义，根据已有节信息推断别的节位置，大小，从而完成修复节
+
+	Elf32_Dyn* dyn = NULL;
+	Elf32_Dyn* d = NULL;
+	Elf32_Phdr load = { 0 };
+
+	//读取程序头
+	Elf32_Ehdr* pehdr = (Elf32_Ehdr*)pNewBase;
+	Elf32_Phdr* phdr = (Elf32_Phdr*)(pNewBase + pehdr->e_phoff);
+	int ph_num = pehdr->e_phnum;
+	int dyn_size = 0;
+	int dyn_off = 0;
+	int nbucket = 0;
+	int nchain = 0;
+	int flag = 0;
+
+	//需要重新修正各个表的偏移
+	for (size_t i = 0; i < ph_num; i++)
+	{
+		if (phdr[i].p_type == PT_LOAD)
+		{
+			if (phdr[i].p_vaddr > 0x0)
+			{
+				load = phdr[i];
+				shdr[BSS].sh_name = strstr(str, ".bss") - str;
+				shdr[BSS].sh_type = SHT_NOBITS;
+				shdr[BSS].sh_flags = SHF_WRITE | SHF_ALLOC;
+				shdr[BSS].sh_addr = phdr[i].p_vaddr + phdr[i].p_filesz;
+				shdr[BSS].sh_offset = shdr[BSS].sh_addr - 0x1000;
+				shdr[BSS].sh_addralign = 1;
+				continue;
+			}
+		}
+
+		if (phdr[i].p_type == PT_DYNAMIC)
+		{
+			shdr[DYNAMIC].sh_name = strstr(str, ".dynamic") - str;
+			shdr[DYNAMIC].sh_type = SHT_DYNAMIC;
+			shdr[DYNAMIC].sh_flags = SHF_WRITE | SHF_ALLOC;
+			shdr[DYNAMIC].sh_addr = phdr[i].p_vaddr;
+			shdr[DYNAMIC].sh_offset = phdr[i].p_offset +  0x1000;
+			shdr[DYNAMIC].sh_size = phdr[i].p_filesz;
+			shdr[DYNAMIC].sh_link = 2;
+			shdr[DYNAMIC].sh_info = 0;
+			shdr[DYNAMIC].sh_addralign = 4;
+			shdr[DYNAMIC].sh_entsize = 8;
+			dyn_size = phdr[i].p_filesz;
+			dyn_off = phdr[i].p_offset;
+			continue;
+		}
+
+		if (phdr[i].p_type == PT_LOPROC || phdr[i].p_type == PT_LOPROC +1)
+		{
+			shdr[ARMEXIDX].sh_name = strstr(str, ".ARM.exidx") - str;
+			shdr[ARMEXIDX].sh_type = SHT_LOPROC;
+			shdr[ARMEXIDX].sh_flags =  SHF_ALLOC;
+			shdr[ARMEXIDX].sh_addr = phdr[i].p_vaddr;
+			shdr[ARMEXIDX].sh_offset = phdr[i].p_offset;
+			shdr[ARMEXIDX].sh_size = phdr[i].p_filesz;
+			shdr[ARMEXIDX].sh_link = 7;
+			shdr[ARMEXIDX].sh_info = 0;
+			shdr[ARMEXIDX].sh_addralign = 4;
+			shdr[ARMEXIDX].sh_entsize = 8;
+			continue;
+		}
+		
+	}
+
+	dyn = (Elf32_Dyn*)malloc(dyn_size);
+	memset(dyn, 0, dyn_size);
+	memcpy(dyn, (char*)(pNewBase + dyn_off), dyn_size);
+
+	for (size_t i = 0; i < dyn_size / sizeof(Elf32_Dyn) ; i++)
+	{
+		switch (dyn[i].d_tag)
+		{
+		case DT_SYMTAB:
+			shdr[DYNSYM].sh_name = strstr(str, ".dynsym") - str;
+			shdr[DYNSYM].sh_type = SHT_DYNSYM;
+			shdr[DYNSYM].sh_flags = SHF_ALLOC;
+			shdr[DYNSYM].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[DYNSYM].sh_offset = dyn[i].d_un.d_ptr;
+			shdr[DYNSYM].sh_link = 2;
+			shdr[DYNSYM].sh_info = 1;
+			shdr[DYNSYM].sh_addralign = 4;
+			shdr[DYNSYM].sh_entsize = 16;
+			break;
+		case DT_STRTAB:
+			shdr[DYNSTR].sh_name = strstr(str, ".dynstr") - str;
+			shdr[DYNSTR].sh_type = SHT_STRTAB;
+			shdr[DYNSTR].sh_flags = SHF_ALLOC;
+			shdr[DYNSTR].sh_offset = dyn[i].d_un.d_ptr;
+			shdr[DYNSTR].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[DYNSTR].sh_addralign = 1;
+			shdr[DYNSTR].sh_entsize = 0;
+			break;
+		case DT_HASH:   ///???
+			shdr[HASH].sh_name = strstr(str, ".hash") - str;
+			shdr[HASH].sh_type = SHT_HASH;
+			shdr[HASH].sh_flags = SHF_ALLOC;
+			shdr[HASH].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[HASH].sh_offset = dyn[i].d_un.d_ptr;
+			memcpy(&nbucket, pNewBase + shdr[HASH].sh_offset, 4);
+			memcpy(&nchain, pNewBase + shdr[HASH].sh_offset + 4, 4);
+			shdr[HASH].sh_size = (nbucket + nchain + 2) * sizeof(int);
+			shdr[HASH].sh_link = 4;
+			shdr[HASH].sh_info = 1;
+			shdr[HASH].sh_addralign = 4;
+			shdr[HASH].sh_entsize = 4;
+			break;
+
+		case DT_REL:
+			shdr[RELDYN].sh_name = strstr(str, ".rel.dyn") - str;
+			shdr[RELDYN].sh_type = SHT_REL;
+			shdr[RELDYN].sh_flags = SHF_ALLOC;
+			//shdr[RELDYN].sh_addr = dyn[i].d_un.d_ptr;
+			//shdr[RELDYN].sh_offset = dyn[i].d_un.d_ptr;
+			shdr[RELDYN].sh_link = 4;
+			shdr[RELDYN].sh_info = 0;
+			shdr[RELDYN].sh_addralign = 4;
+			shdr[RELDYN].sh_entsize = 8;
+			break;
+
+		case DT_JMPREL:
+			shdr[RELPLT].sh_name = strstr(str, ".rel.plt") - str;
+			shdr[RELPLT].sh_type = SHT_REL;
+			shdr[RELPLT].sh_flags = SHF_ALLOC;
+			//shdr[RELPLT].sh_addr = dyn[i].d_un.d_ptr;
+			//shdr[RELPLT].sh_offset = dyn[i].d_un.d_ptr;
+			shdr[RELPLT].sh_link = 1;
+			shdr[RELPLT].sh_info = 6;
+			shdr[RELPLT].sh_addralign = 4;
+			shdr[RELPLT].sh_entsize = 8;
+			break;
+
+		case DT_PLTRELSZ:
+			shdr[RELPLT].sh_size = dyn[i].d_un.d_val;
+			break;
+		case DT_FINI:
+			shdr[FINIARRAY].sh_name = strstr(str, ".fini_array") - str;
+			shdr[FINIARRAY].sh_type = 15;
+			shdr[FINIARRAY].sh_flags = SHF_WRITE | SHF_ALLOC;
+			//shdr[FINIARRAY].sh_offset = dyn[i].d_un.d_ptr - 0x1000;
+			//shdr[FINIARRAY].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[FINIARRAY].sh_addralign = 4;
+			shdr[FINIARRAY].sh_entsize = 0;
+			break;
+
+		case DT_INIT:
+			shdr[INITARRAY].sh_name = strstr(str, ".init_array") - str;
+			shdr[INITARRAY].sh_type = 14;
+			shdr[INITARRAY].sh_flags = SHF_WRITE | SHF_ALLOC;
+			//shdr[INITARRAY].sh_offset = dyn[i].d_un.d_ptr - 0x1000;
+			//shdr[INITARRAY].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[INITARRAY].sh_addralign = 4;
+			shdr[INITARRAY].sh_entsize = 0;
+			break;
+		case DT_RELSZ:
+			shdr[RELDYN].sh_size = dyn[i].d_un.d_val;
+			break;
+		case DT_STRSZ:
+			shdr[DYNSTR].sh_size = dyn[i].d_un.d_val;
+			break;
+
+		case DT_PLTGOT:
+			shdr[GOT].sh_name = strstr(str, ".got") - str;
+			shdr[GOT].sh_type = SHT_PROGBITS;
+			shdr[GOT].sh_flags = SHF_WRITE | SHF_ALLOC;
+			//shdr[GOT].sh_addr = shdr[DYNAMIC].sh_addr + shdr[DYNAMIC].sh_size;
+			//shdr[GOT].sh_offset = shdr[GOT].sh_addr - 0x1000;
+			//shdr[GOT].sh_size = dyn[i].d_un.d_ptr;
+			shdr[GOT].sh_addralign = 4;
+			break;
+		}
+	}
+
+
+	//shdr[GOT].sh_size = shdr[GOT].sh_size + 4 * (shdr[RELPLT].sh_size) / sizeof(Elf32_Rel) + 3 * sizeof(int) - shdr[GOT].sh_addr;
+
+	//STRTAB地址 - SYMTAB地址 = SYMTAB大小
+	//shdr[DYNSYM].sh_size = shdr[DYNSTR].sh_addr - shdr[DYNSYM].sh_addr;
+
+	//shdr[FINIARRAY].sh_size = shdr[INITARRAY].sh_addr - shdr[FINIARRAY].sh_addr;
+	//shdr[INITARRAY].sh_size = shdr[DYNAMIC].sh_addr - shdr[INITARRAY].sh_addr;
+
+	shdr[PLT].sh_name = strstr(str, ".plt") - str;
+	shdr[PLT].sh_type = SHT_PROGBITS;
+	shdr[PLT].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+	//shdr[PLT].sh_addr = shdr[RELPLT].sh_addr + shdr[RELPLT].sh_size;
+	//shdr[PLT].sh_offset = shdr[PLT].sh_addr;
+	//shdr[PLT].sh_size = (20 + 12 * (shdr[RELPLT].sh_size) / sizeof(Elf32_Rel));
+	//shdr[PLT].sh_addralign = 4;
+
+	shdr[TEXT_CODE].sh_name = strstr(str, ".text") - str;
+	shdr[TEXT_CODE].sh_type = SHT_PROGBITS;
+	shdr[TEXT_CODE].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+	//shdr[TEXT_CODE].sh_addr = shdr[PLT].sh_addr + shdr[PLT].sh_size;
+	//shdr[TEXT_CODE].sh_offset = shdr[TEXT_CODE].sh_addr;
+	//shdr[TEXT_CODE].sh_size = shdr[ARMEXIDX].sh_addr - shdr[TEXT_CODE].sh_addr;
+
+	shdr[DATA].sh_name = strstr(str, ".data") - str;
+	shdr[DATA].sh_type = SHT_PROGBITS;
+	shdr[DATA].sh_flags = SHF_WRITE | SHF_ALLOC;
+	//shdr[DATA].sh_addr = shdr[GOT].sh_addr + shdr[GOT].sh_size;
+	//shdr[DATA].sh_offset = shdr[DATA].sh_addr - 0x1000;
+	//shdr[DATA].sh_size = load.p_vaddr + load.p_filesz - shdr[DATA].sh_addr;
+	//shdr[DATA].sh_addralign = 4;
+	//shdr[GOT].sh_size = shdr[DATA].sh_offset - shdr[GOT].sh_offset;
+
+	int CpySecoffset = m_dwFileSize + 16 - m_dwFileSize % 16 + 32;
+	int CpyShStroffset = CpySecoffset + sizeof(shdr) + 0x20;
+	shdr[STRTAB].sh_name = strstr(str, ".shstrtab") - str;
+	shdr[STRTAB].sh_type = SHT_STRTAB;
+	shdr[STRTAB].sh_flags = SHT_NULL;
+	shdr[STRTAB].sh_addr = 0;
+	shdr[STRTAB].sh_offset = CpyShStroffset;
+	shdr[STRTAB].sh_size = strlen(str) + 1;
+	shdr[STRTAB].sh_addralign = 1;
+
+
+
+	//fix new section table
+	memcpy(pNewBase + CpySecoffset, shdr, sizeof(shdr));
+	memcpy(pNewBase + CpyShStroffset, str1, strlen(str) +1);
+
+
+	pehdr->e_shoff = CpySecoffset;
+	pehdr->e_shnum = SHDRS;
+	pehdr->e_shstrndx = SHDRS - 1;
+
+
+
+	/*
+
+	memcpy(pNewBase + shdr[GOT].sh_offset, pNewBase + shdr[GOT].sh_offset + 0x1000,  shdr[GOT].sh_size);
+	memcpy(pNewBase + shdr[STRTAB].sh_offset, str1, strlen(str) + 1);
+	memcpy(pNewBase + pehdr->e_shoff ,  shdr , pehdr->e_shentsize * pehdr->e_shnum );
+	*/
+
+	//没有strtab和symtab，打包的apk解压出来没有这两个表所以不重建这两个表了
+	return VOID();
 }

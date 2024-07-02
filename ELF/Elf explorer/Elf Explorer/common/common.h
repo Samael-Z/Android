@@ -255,7 +255,7 @@ enum GetProgramType {
 	None = 0x0,
 	GetDefProgramType = 0x1,
 	GetProgramType = 0x2,
-	GetProgramMemType = 0x3,
+	GetMemType = 0x3,
 	ProgramHeader32 = 0x4,
 	ProgramHeader64 = 0x5,
 	SectionHeader32 = 0x6,
@@ -274,6 +274,11 @@ enum GetProgramType {
 	UNDEF  = 0xff,
 };
 
+/*
+	ELFCLASSNONE = 19,
+	ELFCLASS32 = 20,
+	ELFCLASS64 = 21,
+*/
 
 
 
