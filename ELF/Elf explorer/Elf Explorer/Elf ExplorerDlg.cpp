@@ -1708,8 +1708,8 @@ VOID CElfExplorerDlg::FixSectionTable(char* pNewBase)
 			shdr[RELDYN].sh_name = strstr(str, ".rel.dyn") - str;
 			shdr[RELDYN].sh_type = SHT_REL;
 			shdr[RELDYN].sh_flags = SHF_ALLOC;
-			//shdr[RELDYN].sh_addr = dyn[i].d_un.d_ptr;
-			//shdr[RELDYN].sh_offset = dyn[i].d_un.d_ptr;
+			shdr[RELDYN].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[RELDYN].sh_offset = dyn[i].d_un.d_ptr;
 			shdr[RELDYN].sh_link = 4;
 			shdr[RELDYN].sh_info = 0;
 			shdr[RELDYN].sh_addralign = 4;
@@ -1720,8 +1720,8 @@ VOID CElfExplorerDlg::FixSectionTable(char* pNewBase)
 			shdr[RELPLT].sh_name = strstr(str, ".rel.plt") - str;
 			shdr[RELPLT].sh_type = SHT_REL;
 			shdr[RELPLT].sh_flags = SHF_ALLOC;
-			//shdr[RELPLT].sh_addr = dyn[i].d_un.d_ptr;
-			//shdr[RELPLT].sh_offset = dyn[i].d_un.d_ptr;
+			shdr[RELPLT].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[RELPLT].sh_offset = dyn[i].d_un.d_ptr;
 			shdr[RELPLT].sh_link = 1;
 			shdr[RELPLT].sh_info = 6;
 			shdr[RELPLT].sh_addralign = 4;
@@ -1735,8 +1735,8 @@ VOID CElfExplorerDlg::FixSectionTable(char* pNewBase)
 			shdr[FINIARRAY].sh_name = strstr(str, ".fini_array") - str;
 			shdr[FINIARRAY].sh_type = 15;
 			shdr[FINIARRAY].sh_flags = SHF_WRITE | SHF_ALLOC;
-			//shdr[FINIARRAY].sh_offset = dyn[i].d_un.d_ptr - 0x1000;
-			//shdr[FINIARRAY].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[FINIARRAY].sh_offset = dyn[i].d_un.d_ptr - 0x1000;
+			shdr[FINIARRAY].sh_addr = dyn[i].d_un.d_ptr;
 			shdr[FINIARRAY].sh_addralign = 4;
 			shdr[FINIARRAY].sh_entsize = 0;
 			break;
@@ -1745,8 +1745,8 @@ VOID CElfExplorerDlg::FixSectionTable(char* pNewBase)
 			shdr[INITARRAY].sh_name = strstr(str, ".init_array") - str;
 			shdr[INITARRAY].sh_type = 14;
 			shdr[INITARRAY].sh_flags = SHF_WRITE | SHF_ALLOC;
-			//shdr[INITARRAY].sh_offset = dyn[i].d_un.d_ptr - 0x1000;
-			//shdr[INITARRAY].sh_addr = dyn[i].d_un.d_ptr;
+			shdr[INITARRAY].sh_offset = dyn[i].d_un.d_ptr - 0x1000;
+			shdr[INITARRAY].sh_addr = dyn[i].d_un.d_ptr;
 			shdr[INITARRAY].sh_addralign = 4;
 			shdr[INITARRAY].sh_entsize = 0;
 			break;
@@ -1761,46 +1761,74 @@ VOID CElfExplorerDlg::FixSectionTable(char* pNewBase)
 			shdr[GOT].sh_name = strstr(str, ".got") - str;
 			shdr[GOT].sh_type = SHT_PROGBITS;
 			shdr[GOT].sh_flags = SHF_WRITE | SHF_ALLOC;
-			//shdr[GOT].sh_addr = shdr[DYNAMIC].sh_addr + shdr[DYNAMIC].sh_size;
-			//shdr[GOT].sh_offset = shdr[GOT].sh_addr - 0x1000;
-			//shdr[GOT].sh_size = dyn[i].d_un.d_ptr;
+			shdr[GOT].sh_addr = shdr[DYNAMIC].sh_addr + shdr[DYNAMIC].sh_size;
+			shdr[GOT].sh_offset = shdr[GOT].sh_addr - 0x1000;
+			shdr[GOT].sh_size = dyn[i].d_un.d_ptr;
 			shdr[GOT].sh_addralign = 4;
 			break;
 		}
 	}
-
-
-	//shdr[GOT].sh_size = shdr[GOT].sh_size + 4 * (shdr[RELPLT].sh_size) / sizeof(Elf32_Rel) + 3 * sizeof(int) - shdr[GOT].sh_addr;
-
 	//STRTAB地址 - SYMTAB地址 = SYMTAB大小
-	//shdr[DYNSYM].sh_size = shdr[DYNSTR].sh_addr - shdr[DYNSYM].sh_addr;
+	shdr[DYNSYM].sh_size = shdr[DYNSTR].sh_addr - shdr[DYNSYM].sh_addr;
+	//判断dynsym大小，循环遍历dynsym起始处，通过st_size字段小于0xFFFF,st_info在指定的序列内来判断动态符号表是否到达结尾，准确率挺高的
+	//动态节区中保存的有dynstr的长度。
+	//Elf32_Sym* symTmp = (Elf32_Sym*)(pNewBase + shdr[DYNSYM].sh_offset);
+	//DWORD dwItemNum = 0;
+	//while (true) {
 
-	//shdr[FINIARRAY].sh_size = shdr[INITARRAY].sh_addr - shdr[FINIARRAY].sh_addr;
-	//shdr[INITARRAY].sh_size = shdr[DYNAMIC].sh_addr - shdr[INITARRAY].sh_addr;
+	//	BOOL bsize = symTmp->st_size > 0xffff;
+	//	BOOL bbind = FALSE;
+	//	BOOL btype = FALSE;
+	//	DWORD dwBind = ELF_ST_BIND(symTmp->st_info);
+	//	DWORD dwType = ELF_ST_TYPE(symTmp->st_info);
+	//	if (dwType == STT_NOTYPE || dwType == STT_OBJECT || dwType == STT_FUNC ||  dwType == STT_SECTION || dwType == STT_FILE)
+	//	{
+	//		dwType = TRUE;
+	//	}
+	//	if (dwBind == STB_LOCAL || dwBind == STB_GLOBAL || dwBind == STB_WEAK)
+	//	{
+	//		dwBind = TRUE;
+	//	}
+	//	//如果这三个条件都为真，说明该格式依然是符号表格式，取反说明符号表遍历到末尾了,退出循环
+	//	if (!(bsize && bbind && btype))
+	//	{
+	//		break;
+	//	}
+	//	dwItemNum++;
+	//	symTmp++;
+	//}
+	//shdr[DYNSYM].sh_size = dwItemNum * 0x10;
+
+	shdr[GOT].sh_size = shdr[GOT].sh_size + 4 * (shdr[RELPLT].sh_size) / sizeof(Elf32_Rel) + 3 * sizeof(int) - shdr[GOT].sh_addr;
+
+
+	
+	shdr[FINIARRAY].sh_size = shdr[INITARRAY].sh_addr - shdr[FINIARRAY].sh_addr;
+	shdr[INITARRAY].sh_size = shdr[DYNAMIC].sh_addr - shdr[INITARRAY].sh_addr;
 
 	shdr[PLT].sh_name = strstr(str, ".plt") - str;
 	shdr[PLT].sh_type = SHT_PROGBITS;
 	shdr[PLT].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
-	//shdr[PLT].sh_addr = shdr[RELPLT].sh_addr + shdr[RELPLT].sh_size;
-	//shdr[PLT].sh_offset = shdr[PLT].sh_addr;
-	//shdr[PLT].sh_size = (20 + 12 * (shdr[RELPLT].sh_size) / sizeof(Elf32_Rel));
-	//shdr[PLT].sh_addralign = 4;
+	shdr[PLT].sh_addr = shdr[RELPLT].sh_addr + shdr[RELPLT].sh_size;
+	shdr[PLT].sh_offset = shdr[PLT].sh_addr;
+	shdr[PLT].sh_size = (20 + 12 * (shdr[RELPLT].sh_size) / sizeof(Elf32_Rel));
+	shdr[PLT].sh_addralign = 4;
 
 	shdr[TEXT_CODE].sh_name = strstr(str, ".text") - str;
 	shdr[TEXT_CODE].sh_type = SHT_PROGBITS;
 	shdr[TEXT_CODE].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
-	//shdr[TEXT_CODE].sh_addr = shdr[PLT].sh_addr + shdr[PLT].sh_size;
-	//shdr[TEXT_CODE].sh_offset = shdr[TEXT_CODE].sh_addr;
-	//shdr[TEXT_CODE].sh_size = shdr[ARMEXIDX].sh_addr - shdr[TEXT_CODE].sh_addr;
+	shdr[TEXT_CODE].sh_addr = shdr[PLT].sh_addr + shdr[PLT].sh_size;
+	shdr[TEXT_CODE].sh_offset = shdr[TEXT_CODE].sh_addr;
+	shdr[TEXT_CODE].sh_size = shdr[ARMEXIDX].sh_addr - shdr[TEXT_CODE].sh_addr;
 
 	shdr[DATA].sh_name = strstr(str, ".data") - str;
 	shdr[DATA].sh_type = SHT_PROGBITS;
 	shdr[DATA].sh_flags = SHF_WRITE | SHF_ALLOC;
-	//shdr[DATA].sh_addr = shdr[GOT].sh_addr + shdr[GOT].sh_size;
-	//shdr[DATA].sh_offset = shdr[DATA].sh_addr - 0x1000;
-	//shdr[DATA].sh_size = load.p_vaddr + load.p_filesz - shdr[DATA].sh_addr;
-	//shdr[DATA].sh_addralign = 4;
-	//shdr[GOT].sh_size = shdr[DATA].sh_offset - shdr[GOT].sh_offset;
+	shdr[DATA].sh_addr = shdr[GOT].sh_addr + shdr[GOT].sh_size;
+	shdr[DATA].sh_offset = shdr[DATA].sh_addr - 0x1000;
+	shdr[DATA].sh_size = load.p_vaddr + load.p_filesz - shdr[DATA].sh_addr;
+	shdr[DATA].sh_addralign = 4;
+	shdr[GOT].sh_size = shdr[DATA].sh_offset - shdr[GOT].sh_offset;
 
 	int CpySecoffset = m_dwFileSize + 16 - m_dwFileSize % 16 + 32;
 	int CpyShStroffset = CpySecoffset + sizeof(shdr) + 0x20;

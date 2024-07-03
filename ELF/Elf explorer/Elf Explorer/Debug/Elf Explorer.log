@@ -1,4 +1,1 @@
-﻿  Elf ExplorerDlg.cpp
-D:\androidclib\Elf Explorer\Elf Explorer\Elf ExplorerDlg.cpp(290,19): warning C4244: “=”: 从“LONGLONG”转换到“DWORD”，可能丢失数据
-D:\androidclib\Elf Explorer\Elf Explorer\Elf ExplorerDlg.cpp(1612,23): warning C4018: “<”: 有符号/无符号不匹配
-  Elf Explorer.vcxproj -> D:\androidclib\Elf Explorer\Debug\Elf Explorer.exe
+﻿  Elf Explorer.vcxproj -> D:\androidclib\Elf Explorer\Debug\Elf Explorer.exe
