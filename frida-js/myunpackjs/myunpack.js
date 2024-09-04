@@ -11,7 +11,7 @@ objdump和nm中得到的导出符号都是m的，奇怪哦
 art::ArtDexFileLoader::OpenCommon(unsigned char const*, unsigned long, unsigned char const*, unsigned long, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, unsigned int, art::OatDexFile const*, bool, bool, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>*, std::__1::unique_ptr<art::DexFileContainer, std::__1::default_delete<art::DexFileContainer>>, art::DexFileLoader::VerifyResult*)
 _ZN3art16ArtDexFileLoader10OpenCommonEPKhmS2_mRKNSt3__112basic_stringIcNS3_11char_traitsIcEENS3_9allocatorIcEEEEjPKNS_10OatDexFileEbbPS9_NS3_10unique_ptrINS_16DexFileContainerENS3_14default_deleteISH_EEEEPNS_13DexFileLoader12VerifyResultE
 
-
+函数声明
 std::unique_ptr<DexFile> ArtDexFileLoader::OpenCommon(const uint8_t* base,
                                                       size_t size,
                                                       const uint8_t* data_base,
